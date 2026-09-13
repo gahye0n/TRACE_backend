@@ -17,10 +17,14 @@ from . import features, inference, video, visualize
 
 app = FastAPI(title="AI 생성 영상 탐지 API")
 
-# 프론트엔드(GitHub Pages)에서 호출할 수 있도록 CORS 허용.
+# 프론트엔드(GitHub Pages, 로컬 정적 서버)에서 호출할 수 있도록 CORS 허용.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://gahye0n.github.io"],
+    allow_origins=[
+        "https://gahye0n.github.io",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
