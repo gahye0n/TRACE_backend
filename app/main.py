@@ -57,7 +57,8 @@ async def analyze(file: UploadFile = File(...)):
         results = inference.predict_all(feature_row, _models)
         contribution = inference.contribution_breakdown(_models)
         frame_thumbs = [visualize.frame_to_base64_jpeg(f) for f in frames_rgb]
-        spectrum = visualize.spectrum_panel_base64(frames_rgb[0], frames_gray=frames_gray)
+        dominant_color = visualize.extract_dominant_color_hex(frames_rgb)
+        spectrum = visualize.spectrum_panel_base64(frames_rgb[0], dominant_color, frames_gray=frames_gray)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except KeyError as e:
@@ -72,4 +73,5 @@ async def analyze(file: UploadFile = File(...)):
         "spectrum": spectrum,         # {"original":..., "fft":..., "wavelet":..., "temporal_fft":..., "temporal_wavelet":...}
         "features": feature_row,     # 예측에 쓰인 모든 원본 피처 값 {"framediff_0000": 0.01, ...}
         "feature_columns_by_model": {name: m.feature_columns for name, m in _models.items()},
+        "dominant_color": dominant_color,  # 영상에서 뽑은 대표색(hex) — 퍼센트 바·스펙트럼 컬러맵에 공용으로 사용
     }
