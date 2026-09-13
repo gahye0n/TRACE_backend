@@ -17,11 +17,10 @@ from . import features, inference, video, visualize
 
 app = FastAPI(title="AI 생성 영상 탐지 API")
 
-# 프론트엔드(Vercel 등 다른 도메인)에서 호출할 수 있도록 CORS 허용.
-# 배포 시 "*" 대신 실제 프론트엔드 도메인으로 좁히는 것을 권장.
+# 프론트엔드(GitHub Pages)에서 호출할 수 있도록 CORS 허용.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://gahye0n.github.io"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
