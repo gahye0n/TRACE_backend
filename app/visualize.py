@@ -13,7 +13,6 @@ import pywt
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap, to_rgb
 
 
 def frame_to_base64_jpeg(frame_rgb, size=160, quality=82) -> str:
@@ -45,13 +44,6 @@ def extract_dominant_color_hex(frames_rgb, k=4, sample_every=4) -> str:
     return "#{:02x}{:02x}{:02x}".format(round(r * 255), round(g * 255), round(b * 255))
 
 
-def _cmap_from_hex(hex_color, light=(0.04, 0.04, 0.05)) -> LinearSegmentedColormap:
-    """단색을 어두운 색 -> 그 색 -> 흰색으로 잇는 컬러맵으로 확장 — 스펙트럼·웨이블릿 시각화에서
-    matplotlib 기본 컬러맵(viridis/magma) 대신 영상 고유의 색으로 강도를 표현하기 위함."""
-    rgb = to_rgb(hex_color)
-    return LinearSegmentedColormap.from_list("video_accent", [light, rgb, (1, 1, 1)], N=256)
-
-
 def _fig_to_base64_png(fig) -> str:
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.05, dpi=140, transparent=True)
@@ -59,25 +51,24 @@ def _fig_to_base64_png(fig) -> str:
     return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
-def _quad_composite_base64(cA, cH, cV, cD, accent_hex, figsize=(4.2, 4.2)) -> str:
+def _quad_composite_base64(cA, cH, cV, cD, figsize=(4.2, 4.2)) -> str:
     """근사(LL, 좌상) / 수평(LH, 우상) / 수직(HL, 좌하) / 대각(HH, 우하) 4개 부대역을
-    하나의 정사각 이미지에 2x2로 배치한다. 고주파 3개 대역은 영상에서 뽑은 강조색 컬러맵으로 그린다."""
-    cmap = _cmap_from_hex(accent_hex)
+    하나의 정사각 이미지에 2x2로 배치한다."""
     fig, axes = plt.subplots(2, 2, figsize=figsize)
     panels = [
         (axes[0, 0], cA, "gray"),
-        (axes[0, 1], np.abs(cH), cmap),
-        (axes[1, 0], np.abs(cV), cmap),
-        (axes[1, 1], np.abs(cD), cmap),
+        (axes[0, 1], np.abs(cH), "viridis"),
+        (axes[1, 0], np.abs(cV), "viridis"),
+        (axes[1, 1], np.abs(cD), "viridis"),
     ]
-    for ax, data, cmap_ in panels:
-        ax.imshow(data, cmap=cmap_)
+    for ax, data, cmap in panels:
+        ax.imshow(data, cmap=cmap)
         ax.axis("off")
     fig.subplots_adjust(wspace=0.04, hspace=0.04, left=0, right=1, top=1, bottom=0)
     return _fig_to_base64_png(fig)
 
 
-def wavelet_decomposition_base64(gray, accent_hex, wavelet="haar", levels=2) -> dict:
+def wavelet_decomposition_base64(gray, wavelet="haar", levels=2) -> dict:
     """features.hfwavelet_base_feature와 완전히 동일한 반복(2-level Haar DWT)을 그대로 따라가며,
     각 레벨에서 실제로 계산에 쓰이는 4개 부대역(근사 LL / 수평 LH / 수직 HL / 대각 HH)을
     2x2 사분할 이미지 한 장으로 합쳐 보여준다.
@@ -90,9 +81,9 @@ def wavelet_decomposition_base64(gray, accent_hex, wavelet="haar", levels=2) -> 
         if lv == 1:
             composite = np.abs(cH) + np.abs(cV) + np.abs(cD)
             fig, ax = plt.subplots(figsize=(3, 3))
-            ax.imshow(composite, cmap=_cmap_from_hex(accent_hex)); ax.axis("off")
+            ax.imshow(composite, cmap="viridis"); ax.axis("off")
             final_b64 = _fig_to_base64_png(fig)
-        level_images.append({"level": lv, "quad": _quad_composite_base64(cA, cH, cV, cD, accent_hex)})
+        level_images.append({"level": lv, "quad": _quad_composite_base64(cA, cH, cV, cD)})
         current = cA
     return {"final": final_b64, "levels": level_images}
 
@@ -149,9 +140,9 @@ def temporal_wavelet_spectrum_base64(frames_gray, accent_hex, size=64, wavelet="
 def spectrum_panel_base64(frame_rgb, accent_hex, frames_gray=None) -> dict:
     """노트북 §8-1과 동일한 정의 — 원본 프레임 / FFT 파워 스펙트럼 / Wavelet(최종 결과 + 대역별 분해)에 더해
     frames_gray(24프레임 전체)가 주어지면 시간축 FFT/Wavelet 스펙트럼도 함께 반환한다.
-    accent_hex(영상에서 뽑은 대표색)를 모든 시각화의 컬러맵/막대 색으로 공유해서 "그 영상만의 색"으로 보이게 한다."""
+    FFT/Wavelet 이미지는 원래 컬러맵(magma/viridis)을 유지하고, accent_hex(영상에서 뽑은 대표색)는
+    시간축 스펙트럼 막대그래프(Temporal FFT/Wavelet)에만 적용한다."""
     gray = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2GRAY)
-    cmap = _cmap_from_hex(accent_hex)
 
     # 원본 프레임
     fig1, ax1 = plt.subplots(figsize=(3, 3))
@@ -162,11 +153,11 @@ def spectrum_panel_base64(frame_rgb, accent_hex, frames_gray=None) -> dict:
     f = np.fft.fftshift(np.fft.fft2(gray.astype(np.float32) / 255.0))
     mag = np.log1p(np.abs(f))
     fig2, ax2 = plt.subplots(figsize=(3, 3))
-    ax2.imshow(mag, cmap=cmap); ax2.axis("off")
+    ax2.imshow(mag, cmap="magma"); ax2.axis("off")
     fft_b64 = _fig_to_base64_png(fig2)
 
     # Wavelet — features.hfwavelet_base_feature와 동일한 2-level Haar DWT, 최종 결과 + 대역별 분해 모두 포함
-    wavelet = wavelet_decomposition_base64(gray, accent_hex)
+    wavelet = wavelet_decomposition_base64(gray)
 
     result = {"original": original_b64, "fft": fft_b64, "wavelet": wavelet}
     if frames_gray is not None:
