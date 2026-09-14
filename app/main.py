@@ -29,6 +29,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# 공개 HTTPS 페이지(GitHub Pages)가 localhost의 이 서버를 호출하면 크롬의
+# Private Network Access 정책이 preflight를 막는다 — 이 헤더가 없으면 CORS를
+# 다 맞춰도 브라우저 단에서 조용히 요청이 거부된다.
+@app.middleware("http")
+async def allow_private_network(request, call_next):
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
+
 _models = None  # 앱 시작 시 한 번만 로드(무거운 작업)
 
 
